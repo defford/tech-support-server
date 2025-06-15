@@ -1,0 +1,134 @@
+name: CI Pipeline
+
+on:
+  # Run on pushes to ANY branch
+  push:
+    
+  # Run on ALL pull requests
+  pull_request:
+
+# Permissions needed for test reporter and other actions
+permissions:
+  contents: read          # Read repository contents
+  checks: write           # Create check runs (for test reporter)
+  pull-requests: write    # Comment on pull requests
+  actions: read           # Read workflow run info
+
+jobs:
+  test:
+    name: Test and Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+        
+    - name: Verify Maven version  
+      run: mvn --version
+      
+    - name: Compile project
+      run: mvn clean compile
+      
+    - name: Run tests
+      run: mvn test
+      
+    - name: Generate test report
+      uses: dorny/test-reporter@v1
+      if: always() && hashFiles('target/surefire-reports/*.xml') != ''
+      with:
+        name: Maven Tests
+        path: target/surefire-reports/*.xml
+        reporter: java-junit
+        fail-on-error: false
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always() && hashFiles('target/surefire-reports/*') != ''
+      with:
+        name: test-results
+        path: target/surefire-reports/
+        
+    - name: Package application
+      run: mvn package -DskipTests
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: jar-artifact
+        path: target/*.jar
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+        
+    - name: Check code formatting
+      run: mvn compile
+      
+    - name: Verify project structure
+      run: |
+        echo "Checking Maven project structure..."
+        test -f pom.xml || (echo "❌ pom.xml not found" && exit 1)
+        test -f src/main/java/com/techsupport/TechSupportApplication.java || (echo "❌ Main application class not found" && exit 1)
+        test -f src/main/resources/application.yml || (echo "❌ Application config not found" && exit 1)
+        test -d src/test/java || (echo "❌ Test directory not found" && exit 1)
+        echo "✅ Project structure is valid"
+        
+    - name: Verify Spring Boot application
+      run: |
+        echo "Starting Spring Boot application..."
+        mvn spring-boot:run > /dev/null 2>&1 &
+        APP_PID=$!
+        echo "Waiting for application to start..."
+        
+        # Wait up to 60 seconds for the application to start
+        for i in {1..12}; do
+          sleep 5
+          if curl -s http://localhost:8080/ > /dev/null 2>&1; then
+            echo "✅ Spring Boot application started successfully"
+            kill $APP_PID 2>/dev/null || true
+            exit 0
+          fi
+          echo "Attempt $i/12: Application not ready yet..."
+        done
+        
+        echo "❌ Spring Boot application failed to start within 60 seconds"
+        kill $APP_PID 2>/dev/null || true
+        exit 1
+
+  dependency-check:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+        
+    - name: Run dependency check
+      run: |
+        mvn dependency:tree
+        mvn dependency:analyze
