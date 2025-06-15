@@ -1,10 +1,11 @@
 name: CI Pipeline
 
 on:
+  # Run on pushes to ANY branch
   push:
-    branches: [ main, develop ]
+    
+  # Run on ALL pull requests
   pull_request:
-    branches: [ main, develop ]
 
 jobs:
   test:
