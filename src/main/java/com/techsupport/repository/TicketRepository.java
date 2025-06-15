@@ -1,5 +1,6 @@
 package com.techsupport.repository;
 
+import com.techsupport.entity.Ticket;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -9,7 +10,7 @@ import org.springframework.stereotype.Repository;
  * Will be fully implemented in Week 2.
  */
 @Repository
-public interface TicketRepository extends JpaRepository<Long, Long> {
+public interface TicketRepository extends JpaRepository<Ticket, Long> {
     // For now, just inherit basic CRUD operations from JpaRepository
     // Custom finder methods will be added in Week 2
 } 
